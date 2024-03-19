@@ -1,4 +1,4 @@
-:root {
+/*:root {
   font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
   font-size: 16px;
   line-height: 24px;
@@ -12,7 +12,7 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
-}
+}*/
 /*
 .container {
   margin: 0;
@@ -53,13 +53,13 @@ h1 {
   text-align: center;
 }*/
 
-input,
+/*input,
 button {
   /*border-radius: 8px;
   border: 1px solid transparent;
   padding: 0.6em 1.2em;
   font-size: 1em;
-  font-weight: 500;*/
+  font-weight: 500;
   font-family: inherit;
   color: #0f0f0f;
   color: black;
@@ -110,3 +110,116 @@ button {
   }
 }
 */
+
+* {
+    box-sizing: border-box;
+}
+
+html {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+}
+
+body {
+    background: #222222;
+    height: 100%
+    width: 100%;
+    margin: 0;
+    position: absolute;
+
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 0;
+    padding: 0;
+
+    color: #eeeeee;
+    font-family: Monospace;
+}
+
+
+
+#content {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    /* padding, prompt and command; padding */
+    /*  TODO: This is ugly  */
+    grid-template-columns: 20px [prompt] 1fr [padding-right] 20px;
+    /* padding; scrollback-content; prompt-line; padding  */
+    grid-template-rows: 20px [scrollback] 1fr [prompt-command] min-content [padding-bottom] 20px;
+}
+
+#scrollback {
+    display: block;
+    overflow: scroll;
+
+    /*Since we have the padding on content, we don't need margin/padding on this bad boy. */
+    margin: 0;
+    padding: 0;
+
+    /* <start> / <end> */
+    grid-column: prompt / padding-right;
+    grid-row: scrollback / prompt-command;
+}
+
+#scrollback pre {
+    margin: 0;
+    white-space: pre-wrap;
+}
+
+/* The prompt has three parts, the left color block, the bottom color block, and then the wrapper. I don't know if there's a better way to do this with `grid`. I want the padding to be the same here and on the scrollback so I'd rather have the padding defined by the grid than push the prompt wrapper to the edges of the screen in order to have the prompt color blocks inside the prompt wrapper. */
+.prompt-color {
+    background: #FFF18A;
+}
+
+/* Wraps the prompt, the command input, the last-output-buttons, and the status bar */
+#prompt-wrapper {
+  grid-column: prompt / padding-right;
+  grid-row: prompt-command / padding-bottom;
+  padding: 0;
+  display: flex;
+  flex-direction: row;
+}
+
+#prompt {
+    color: black;
+
+    display: flex;
+    align-items: center;
+}
+#prompt span {
+    /*padding-top: 5px;*/
+    /*padding-bottom: 5px;   */
+}
+
+#prompt-color-left {
+    grid-column: 1 / prompt;
+    grid-row: prompt-command / padding-bottom;
+}
+#prompt-color-bottom {
+    grid-column: 1 / -1;
+    grid-row: padding-bottom / end;
+}
+#triangle {
+    display: inline-block;
+    width: 25px;
+    height: 100%;
+    background: #222222;
+}
+#triangle path {
+  fill: #FFF18A;
+}
+
+#command {
+    padding-top: 5px;
+    padding-bottom: 5px;
+
+    grid-column: command / padding-right;
+    grid-row: prompt-command / padding-bottom;
+
+    outline: none;
+    caret-color: #FFF18A;
+}

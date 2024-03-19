@@ -1,7 +1,12 @@
-# Tauri + Vanilla
 
-This template should help get you started developing with Tauri in vanilla HTML, CSS and Javascript.
+# Goals and promises
 
-## Recommended IDE Setup
+## 5 Things that make the terminal appealing (SMASH provides all of these)
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+1. Dark themed by default
+2. Assumed to not be maximized—content is constrained to a short horizontal line length.
+3. Predictable content displaying mechanisms.
+4. Displayed content is non-interactive
+5. Prompt is always focused
+
+## 
