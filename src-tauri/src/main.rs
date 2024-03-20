@@ -46,8 +46,8 @@ use std::thread::JoinHandle;
 
 // Since this is a Tauri state global, we, can only have interior mutability
 struct RunningProcess {
-    child: Mutex<Option<Child>>,
-    monitor_thread: Mutex<Option<JoinHandle<()>>>,
+    child: Child,
+    monitor_thread: JoinHandle<()>,
 }
 
 impl RunningProcess {
@@ -58,29 +58,29 @@ impl RunningProcess {
     //     }
     // }
 
-    fn kill(self) -> std::io::Result<()> {
+    fn kill(mut self) -> std::io::Result<()> {
         // Kill both the child process and the monitor thread
         // TODO: I'd rather return an error (since we're already returning a result) instead of panicking here
         // self.child.lock().unwrap().kill()?;
         // lock().unwrap() handles getting the lock, then we have an optional
-        self.child.lock().unwrap().as_mut().unwrap().kill()?;
+        // self.child.lock().unwrap().as_mut().unwrap().kill()?;
+        self.child.kill()?;
         // This lock shouldn't be a problem since this should only be called from the main thread
         // works
         // self.monitor_thread.lock().unwrap().take().unwrap().join().expect("Failed to join monitor thread");
-        self.monitor_thread.lock().unwrap().take().unwrap().join().expect("Failed to join monitor thread");
+        self.monitor_thread.join().expect("Failed to join monitor thread");
 
-        // .as_mut().unwrap().join().
         Ok(())
     }
 }
 
-// struct RunningProcesses {
-//     map: Mutex<HashMap<String, RunningProcess>>
-// }
+struct RunningProcesses {
+    map: Mutex<HashMap<String, RunningProcess>>
+}
 
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
 #[tauri::command]
-fn execute(window: Window, command: &str, id: &str, running_process: State<RunningProcess>) -> String {
+fn execute(window: Window, command: &str, id: &str, running_processes: State<RunningProcesses>) -> String {
     let mut parts = command.trim().split_whitespace();
     let exe = parts.next().unwrap();
 
@@ -93,7 +93,8 @@ fn execute(window: Window, command: &str, id: &str, running_process: State<Runni
     let mut child_stdout = child.stdout.take().unwrap();
 
     // There's an asterisk here, help!
-    *running_process.child.lock().unwrap() = Some(child);
+    // *running_process.child.lock().unwrap() = Some(child);
+
 
     // The thread and the main thread need a reference to the child
 
@@ -101,12 +102,12 @@ fn execute(window: Window, command: &str, id: &str, running_process: State<Runni
     // let child_thread_copy = Arc::clone(&child_arc);
     // child_thread_copy.stdout.unwrap();
 
+    // Need to copy this so that we can use it in the thread
+    // We can't copy it in the thread because we can't use `id` in the thread (or `id` gets moved into the thread)
     let id_copy = id.to_string();
 
     // Need to spawn a thread in order to poll the child io and dispatch events to JS
     let thread_handle = std::thread::spawn(move || {
-
-
         loop {
             let mut byte: [u8; 1] = [0];
             // child_stdout.read(&buf);
@@ -164,47 +165,62 @@ fn execute(window: Window, command: &str, id: &str, running_process: State<Runni
         }
     });
 
-    *running_process.monitor_thread.lock().unwrap() = Some(thread_handle);
+    // *running_process.monitor_thread.lock().unwrap() = Some(thread_handle);
 
     // child.stdout.unwrap().
 
     // running_processes.map.lock().unwrap().insert(id.to_string(), RunningProcess { child: child_arc, monitor_thread: thread_handle });
 
 
-
+    // We take a lock on the whole running_processes map here, which feels weird, but I think is needed.
+    // And it's totally fine since this lock isn't used in the thread, so it's only locked for the fraction of a second that it takes to start the process and put it in the map
+    running_processes.map.lock().unwrap().insert(
+       id.to_string(),
+       RunningProcess {
+            child: child, // move ownership of the child into the HashMap
+            monitor_thread: thread_handle
+       }
+    );
 
     "executing".to_string()
 }
 
 #[tauri::command]
-fn kill(_target: &str, running_process: State<RunningProcess>) {
+fn kill(target: &str, running_processes: State<RunningProcesses>) {
     // Just send control-C to the target
     // running_process.inner().kill();
 
     // If we aren't running a process, this panics, woohoo.
     // Should fix that.
 
-    running_process.child
-        .lock().unwrap() // .lock() locks the mutex but returns an optional in case it fails, so we have to unwrap that
-        .take() // Takes ownership of the optional, leaving None
-        .unwrap() // Unwraps the optional, giving us the ChildProcess
-        .kill().unwrap();
+    // running_process.child
+    //     .lock().unwrap() // .lock() locks the mutex but returns an optional in case it fails, so we have to unwrap that
+    //     .take() // Takes ownership of the optional, leaving None
+    //     .unwrap() // Unwraps the optional, giving us the ChildProcess
+    //     .kill().unwrap();
 
-        //.as_mut().unwrap().kill()?;
-        // This lock shouldn't be a problem since this should only be called from the main thread
-        // works
-        // self.monitor_thread.lock().unwrap().take().unwrap().join().expect("Failed to join monitor thread");
-    running_process.monitor_thread
-        .lock().unwrap()
-        .take()
-        .unwrap()
-        .join().expect("Failed to join monitor thread");
+    //     //.as_mut().unwrap().kill()?;
+    //     // This lock shouldn't be a problem since this should only be called from the main thread
+    //     // works
+    //     // self.monitor_thread.lock().unwrap().take().unwrap().join().expect("Failed to join monitor thread");
+    // running_process.monitor_thread
+    //     .lock().unwrap()
+    //     .take()
+    //     .unwrap()
+    //     .join().expect("Failed to join monitor thread");
+
+    // Move the running process out of the HashMap, so we own it
+    let process = running_processes.map.lock().unwrap().remove(target);
+    // Would love to do error handling and propagate this error but I don't know how to write the type signatures for this function
+    // I also don't understand the difference between a Result and Error and Option and panicking.
+    let _ = process.unwrap().kill();
 }
 
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        .manage(RunningProcess { child: Default::default(), monitor_thread: Default::default() })
+        // .manage(RunningProcess { child: Default::default(), monitor_thread: Default::default() })
+        .manage(RunningProcesses { map: Default::default() })
         .invoke_handler(tauri::generate_handler![execute, kill])
         // .invoke_handler(tauri::generate_handler![])
         .run(tauri::generate_context!())

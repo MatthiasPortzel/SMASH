@@ -111,6 +111,10 @@ button {
 }
 */
 
+:root {
+  --monospaced: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+}
+
 * {
     box-sizing: border-box;
 }
@@ -120,6 +124,9 @@ html {
     padding: 0;
     width: 100%;
     height: 100%;
+
+    /*  Don't let the content scroll-bounce and show the background */
+    overscroll-behavior: none;
 }
 
 body {
@@ -136,7 +143,7 @@ body {
     padding: 0;
 
     color: #eeeeee;
-    font-family: Monospace;
+    font-family: var(--monospaced);
 }
 
 
@@ -147,9 +154,9 @@ body {
     display: grid;
     /* padding, prompt and command; padding */
     /*  TODO: This is ugly  */
-    grid-template-columns: 20px [prompt] 1fr [padding-right] 20px;
+    grid-template-columns: 10px [prompt] 1fr [padding-right] 10px;
     /* padding; scrollback-content; prompt-line; padding  */
-    grid-template-rows: 20px [scrollback] 1fr [prompt-command] min-content [padding-bottom] 20px;
+    grid-template-rows: 10px [scrollback] 1fr [prompt-command] min-content [padding-bottom] 10px;
 }
 
 #scrollback {
@@ -168,6 +175,7 @@ body {
 #scrollback pre {
     margin: 0;
     white-space: pre-wrap;
+    font-family: var(--monospaced);
 }
 
 /* The prompt has three parts, the left color block, the bottom color block, and then the wrapper. I don't know if there's a better way to do this with `grid`. I want the padding to be the same here and on the scrollback so I'd rather have the padding defined by the grid than push the prompt wrapper to the edges of the screen in order to have the prompt color blocks inside the prompt wrapper. */
@@ -222,4 +230,7 @@ body {
 
     outline: none;
     caret-color: #FFF18A;
+
+    /*  Otherwise when it has no content, the width is 0 and the cursor doesn't render, even if it's focused  */
+    min-width: 10px;
 }

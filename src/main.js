@@ -24,9 +24,12 @@ const runningCommands = {};
 
 function executeCommand (command, id) {
   invoke("execute", { command: command, id: id });
+  const element = document.createElement("pre");
+  scrollback.appendChild(element);
   runningCommands[id] = {
     id: id,
     command: command,
+    element: element,
   }
 }
 
@@ -36,7 +39,9 @@ function killCommand (id) {
 
 // We can only have one process running at a time, so we just need one event listener for buffering stdin messages
 listen("data", function (event) {
-  console.log("got data", event, event.payload.map(b => String.fromCharCode(b)).join(""));
+  console.log("got data", event);
+  const [target_id, data] = event.payload;
+  runningCommands[target_id].element.textContent += data.map(b => String.fromCharCode(b)).join("")
 });
 
 listen("eof", function () {
@@ -51,6 +56,8 @@ listen("eof", function () {
 commandInput.addEventListener("keypress", function (event) {
   console.log(event)
   if (event.key === "Enter") {
-    executeCommand(commandInput., Math.random().toFixed(10));
+    executeCommand(commandInput.textContent, Math.random().toFixed(10));
+    event.preventDefault();
+    commandInput.textContent = "";
   }
 });
