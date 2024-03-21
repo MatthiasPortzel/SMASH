@@ -1,9 +1,7 @@
-// Please?
-// import { invoke } from "@tauri-apps/api/app"
-// import { listen } from "@tauri-apps/api/event"
+import { invoke } from "@tauri-apps/api/core"
+import { listen } from "@tauri-apps/api/event"
 
-const { invoke } = window.__TAURI__.core;
-const { listen, emit } = window.__TAURI__.event;
+import { render, h } from "nano-jsx/esm/core.js";
 
 // querySelector instead of getById in case we have a more complicated selector in the future
 const scrollback = document.querySelector("#scrollback");
@@ -22,14 +20,25 @@ const commandInput = document.querySelector("#command");
 
 const runningCommands = {};
 
+const CommandDisplay = ({ command, text }) => {
+  return (
+    <pre>
+      {command}
+    </pre>
+  );
+}
+
 function executeCommand (command, id) {
   invoke("execute", { command: command, id: id });
-  const element = document.createElement("pre");
+
+  const element = render(<CommandDisplay command={command}/>)
+
+  // const element = document.createElement("pre");
   scrollback.appendChild(element);
   runningCommands[id] = {
     id: id,
     command: command,
-    element: element,
+    element: element
   }
 }
 

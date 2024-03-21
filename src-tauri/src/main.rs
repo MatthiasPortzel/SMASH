@@ -9,9 +9,7 @@ use std::collections::HashMap;
 // Traits can only be used if they're in scope ;)
 use std::io::Read;
 
-use std::sync::{Mutex, Arc};
-
-use std::cell::Cell;
+use std::sync::{Mutex};
 
 // use std::thread;
 

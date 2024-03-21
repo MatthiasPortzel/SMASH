@@ -232,5 +232,5 @@ body {
     caret-color: #FFF18A;
 
     /*  Otherwise when it has no content, the width is 0 and the cursor doesn't render, even if it's focused  */
-    min-width: 10px;
+    flex-grow: 1;
 }
