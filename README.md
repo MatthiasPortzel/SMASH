@@ -12,6 +12,24 @@ npm i
 npm run tauri dev
 ```
 
+# Terminology
+SMASH is a terminal, but not a terminal emulator. It does not emulate the VT102 like other terminals.
+> a device at which a user enters data or commands for a computer system and which displays the received output.
+- New Oxford American English Dictionary (2023)
+
+SMASH is also a shell because it ends in "sh", as is required.
+I don't know what a console is, and I made SMASH, so SMASH cannot be a console.
+
+"Process" has a reasonable definition brought to us by the POSIX standard. SMASH can start child processes.
+The command-text is a line or multiple lines of text that you enter into the terminal to be executed.
+The command-input is the area where you actually type in your command.
+The prompt is the text that is in front of the command-input.
+A prompt is any of the bits of texts before any of your previous commands.
+Process-output is the text which the child process outputs.
+Scrollback is all of the text composing your previous prompts, commands, and process-outputs. It does not include the prompt or the command-input.
+
+A command is the "parent" which owns a process, output, prompt, command-text, etc.
+
 # Timeline
 
 ## Alpha

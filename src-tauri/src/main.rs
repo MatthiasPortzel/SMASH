@@ -82,6 +82,8 @@ fn execute(window: Window, command: &str, id: &str, running_processes: State<Run
     let mut parts = command.trim().split_whitespace();
     let exe = parts.next().unwrap();
 
+    println!("Running {}", exe);
+
     let mut child = Command::new(exe)
         .args(parts)
         .stdout(Stdio::piped())

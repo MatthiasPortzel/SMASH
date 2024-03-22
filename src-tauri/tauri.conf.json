@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "identifier": "com.tauri.dev",
   "build": {
-    "beforeDevCommand": "esbuild ./src/main.js --bundle --loader:.js=jsx --jsx-factory=h --jsx-fragment=Fragment --outfile=./src/dist/bundle.js --watch",
+    "beforeDevCommand": "esbuild ./src/main.js --bundle --loader:.js=jsx --jsx-factory=h --jsx-fragment=Fragment --outfile=./src/dist/bundle.js --sourcemap --watch",
     "beforeBuildCommand": "esbuild ../src/main.js --bundle --loader:.js=jsx --jsx-factory=h --jsx-fragment=Fragment --outfile=../src/dist/bundle.js --minify --sourcemap --target=chrome103,safari13",
 
     "frontendDist": "../src"
