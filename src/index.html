@@ -16,22 +16,27 @@
     <div id="content">
         <div id="scrollback"></div>
 
-        <div class="prompt-color" id="prompt-color-left"></div>
-        <div id="command">
-          <div id="the-prompt" class="prompt prompt-color"><span class="prompt-text">%</span>
-            <span id="triangle">
-              <svg version="1.1" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 500 500" preserveAspectRatio="none">
-                <g>
-                  <path d="M0,0L0,500L500,500L0,0Z"></path>
-                </g>
-              </svg>
-            </span>
-          </div>
+        <!-- <div class="prompt-color" id="prompt-color-left"></div> -->
 
-          <!-- spellcheck=false prevents smart quotes and other substitutions -->
-          <div id="command-input" contenteditable spellcheck="false"></div>
+        <!-- TODO Get into JSX and dynamically set unset docked basically if it's clipping  -->
+        <div id="command" class="command docked">
+          <div class="prompt-line">
+            <div id="the-prompt" class="prompt prompt-color"><span class="prompt-text">%</span>
+              <span id="triangle">
+                <svg version="1.1" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 500 500" preserveAspectRatio="none">
+                  <g>
+                    <path d="M0,0L500,0L500,500Z"></path>
+                  </g>
+                </svg>
+              </span>
+            </div>
+
+            <!-- spellcheck=false prevents smart quotes and other substitutions -->
+            <div id="command-input" contenteditable spellcheck="false"></div>
+          </div>
         </div>
-        <div class="prompt-color" id="prompt-color-bottom"></div>
+
+        <!-- <div class="prompt-color" id="prompt-color-bottom"></div> -->
     </div>
   </body>
 </html>

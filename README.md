@@ -30,6 +30,15 @@ Scrollback is all of the text composing your previous prompts, commands, and pro
 
 A command is the "parent" which owns a process, output, prompt, command-text, etc.
 
+Historical prompts (so not the prompt) are never docked.
+The prompt is normally docked, but can also be undocked (if you're in scroll-past-end mode).
+For now, and we might need to refine this, a prompt is "active" if it is the prompt or its command hasn't finished. 
+
+
+I will casually use "prompt" to refer to the prompt and the corresponding command-text / command-input, since the command is entered "at the prompt".
+
+
+
 # Timeline
 
 ## Alpha

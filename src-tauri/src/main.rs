@@ -80,27 +80,34 @@ struct RunningProcesses {
 #[tauri::command]
 fn execute(window: Window, command: &str, id: &str, running_processes: State<RunningProcesses>) -> String {
     let mut parts = command.trim().split_whitespace();
-    let exe = parts.next().unwrap();
+
+    // Use "ls" as the default command if you enter nothing.
+    // Eventually this will be configurable
+    let exe = parts.next().unwrap_or("ls");
 
     println!("Running {}", exe);
 
-    let mut child = Command::new(exe)
+    let child_attempt = Command::new(exe)
         .args(parts)
         .stdout(Stdio::piped())
-        .spawn()
-        .unwrap();
+        .spawn();
+
+
+    if let Err(ref e) = child_attempt {
+        // On Mac, running a command which doesn't exist gives
+        // `Err` value: Os { code: 2, kind: NotFound, message: "No such file or directory" }
+        // We don't know how to handle other errors
+        if e.kind() != std::io::ErrorKind::NotFound {
+            // We force an unwrap, even though we know its an error, to trigger a panic
+            child_attempt.unwrap();
+        }
+
+        return "Command not found".to_string();
+    }
+
+    let mut child = child_attempt.unwrap();
 
     let mut child_stdout = child.stdout.take().unwrap();
-
-    // There's an asterisk here, help!
-    // *running_process.child.lock().unwrap() = Some(child);
-
-
-    // The thread and the main thread need a reference to the child
-
-    // let child_arc = Arc::new(child);
-    // let child_thread_copy = Arc::clone(&child_arc);
-    // child_thread_copy.stdout.unwrap();
 
     // Need to copy this so that we can use it in the thread
     // We can't copy it in the thread because we can't use `id` in the thread (or `id` gets moved into the thread)
@@ -160,17 +167,8 @@ fn execute(window: Window, command: &str, id: &str, running_processes: State<Run
                     // tx.send(Err(PipeError::IO(error))).unwrap();
                 }
             }
-
-            // window.emit("stdout", Payload { message: "Tauri is awesome!".into() }).unwrap();
         }
     });
-
-    // *running_process.monitor_thread.lock().unwrap() = Some(thread_handle);
-
-    // child.stdout.unwrap().
-
-    // running_processes.map.lock().unwrap().insert(id.to_string(), RunningProcess { child: child_arc, monitor_thread: thread_handle });
-
 
     // We take a lock on the whole running_processes map here, which feels weird, but I think is needed.
     // And it's totally fine since this lock isn't used in the thread, so it's only locked for the fraction of a second that it takes to start the process and put it in the map
@@ -182,6 +180,7 @@ fn execute(window: Window, command: &str, id: &str, running_processes: State<Run
        }
     );
 
+    // I think we need to return something. I guess I should check if I actually do
     "executing".to_string()
 }
 

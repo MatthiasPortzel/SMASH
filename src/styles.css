@@ -1,8 +1,17 @@
 :root {
   --monospaced: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  --font-size: 14px; /* Don't go higher by default */
+
+  /* The padding around the outside of the main scrollback/text area.
+    All text needs to be inset from the sides of the viewport by this amount. */
+  --main-padding: 10px;
+
+  --accent: #FFF18A;
+  --background: #222222;
+  --text: #eeeeee;
 }
 
-* {
+*, ::before, ::after {
     box-sizing: border-box;
 }
 
@@ -17,8 +26,8 @@ html {
 }
 
 body {
-    background: #222222;
-    height: 100%
+    background: var(--background);
+    height: 100%;
     width: 100%;
     margin: 0;
     position: absolute;
@@ -29,54 +38,75 @@ body {
     right: 0;
     padding: 0;
 
-    color: #eeeeee;
+    color: var(--text);
     font-family: var(--monospaced);
+    font-size: var(--font-size);
 }
-
-
 
 #content {
     width: 100%;
     height: 100%;
-    display: grid;
-    /* padding, prompt and command; padding */
-    /*  TODO: This is ugly  */
-    grid-template-columns: 10px [prompt] 1fr [padding-right] 10px;
-    /* padding; scrollback-content; prompt-line; padding  */
-    grid-template-rows: 10px [scrollback] 1fr [prompt-command] min-content [padding-bottom] 10px;
 }
 
 #scrollback {
     display: block;
     overflow: scroll;
 
-    /*Since we have the padding on content, we don't need margin/padding on this bad boy. */
     margin: 0;
     padding: 0;
 
     /* <start> / <end> */
     grid-column: prompt / padding-right;
     grid-row: scrollback / prompt-command;
+
+    /* This is how we're doing scroll-past-end.
+    So that's the whole viewport - one line - a couple px padding*/
+    padding-bottom: calc(100vh - var(--font-size) - var(--main-padding));
 }
 
+/* also .process-output */
 #scrollback pre {
     margin: 0;
     white-space: pre-wrap;
     font-family: var(--monospaced);
+    /*  Left and right 10px, top and bottom, 0  */
+    padding: 0 var(--main-padding);
 }
 
+/* This comment is probably out of date. */
 /* The prompt has three parts, the left color block, the bottom color block, and then the wrapper. I don't know if there's a better way to do this with `grid`. I want the padding to be the same here and on the scrollback so I'd rather have the padding defined by the grid than push the prompt wrapper to the edges of the screen in order to have the prompt color blocks inside the prompt wrapper. */
 .prompt-color {
-    background: #FFF18A;
+    background: var(--accent);
 }
 
+.sidebar-overflow-span {
+    position: absolute;
+    width: 100px;
+    align-self: strech; /* Fill to 100% height */
+}
+
+
 /* Wraps the prompt, the command input, the last-output-buttons, and the status bar */
-#command {
-  grid-column: prompt / padding-right;
-  grid-row: prompt-command / padding-bottom;
-  padding: 0;
-  display: flex;
-  flex-direction: row;
+#command.docked {
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+}
+
+.command {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+}
+
+#command-input {
+    background: var(--background);
+}
+
+/* Wraps the prompt and the command test */
+.prompt-line {
+    display: flex;
+    flex-direction: row;
 }
 
 .prompt {
@@ -102,10 +132,10 @@ body {
     display: inline-block;
     width: 25px;
     height: 100%;
-    background: #222222;
+    background: var(--accent);
 }
 #triangle path {
-  fill: #FFF18A;
+  fill: var(--background);
 }
 
 #command-input {
@@ -116,7 +146,7 @@ body {
     grid-row: prompt-command / padding-bottom;
 
     outline: none;
-    caret-color: #FFF18A;
+    caret-color: var(--accent);
 
     /*  Otherwise when it has no content, the width is 0 and the cursor doesn't render, even if it's focused  */
     flex-grow: 1;
