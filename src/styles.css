@@ -22,6 +22,7 @@ html {
     height: 100%;
 
     /*  Don't let the content scroll-bounce and show the background */
+    /*  Needed here because this will scroll-bounce if all the content fits on the page  */
     overscroll-behavior: none;
 }
 
@@ -46,11 +47,16 @@ body {
 #content {
     width: 100%;
     height: 100%;
+
+    overflow: scroll;
+
+    /*  Don't let the content scroll-bounce and show the background */
+    overscroll-behavior: none;
 }
 
 #scrollback {
     display: block;
-    overflow: scroll;
+/*    overflow: scroll;*/
 
     margin: 0;
     padding: 0;
@@ -61,7 +67,7 @@ body {
 
     /* This is how we're doing scroll-past-end.
     So that's the whole viewport - one line - a couple px padding*/
-    padding-bottom: calc(100vh - var(--font-size) - var(--main-padding));
+/*    padding-bottom: calc(100vh - var(--font-size) - var(--main-padding));*/
 }
 
 /* also .process-output */
@@ -75,9 +81,9 @@ body {
 
 /* This comment is probably out of date. */
 /* The prompt has three parts, the left color block, the bottom color block, and then the wrapper. I don't know if there's a better way to do this with `grid`. I want the padding to be the same here and on the scrollback so I'd rather have the padding defined by the grid than push the prompt wrapper to the edges of the screen in order to have the prompt color blocks inside the prompt wrapper. */
-.prompt-color {
+/*.prompt-color {
     background: var(--accent);
-}
+}*/
 
 .sidebar-overflow-span {
     position: absolute;
@@ -87,13 +93,17 @@ body {
 
 
 /* Wraps the prompt, the command input, the last-output-buttons, and the status bar */
-#command.docked {
-    position: fixed;
+#command {
+    position: sticky;
     bottom: 0;
     width: 100%;
+    /*  Allow overscroll by the entire amount - the height of the prompt
+    /*  We will need JS to dynamically update this if the prompt changes height
+    /*  But it's better than pulling in JS to do the entire position of the element like I thought I was going to have to */
+    margin-bottom: calc(100vh - 31px);
 }
 
-.command {
+#prompt {
     display: flex;
     flex-direction: column;
     padding: 0;
@@ -103,7 +113,7 @@ body {
     background: var(--background);
 }
 
-/* Wraps the prompt and the command test */
+/* Wraps the prompt and the command text */
 .prompt-line {
     display: flex;
     flex-direction: row;
@@ -115,27 +125,85 @@ body {
     display: flex;
     align-items: center;
 }
+
+.prompt .prompt-text {
+    align-self: stretch;
+    padding: 3px;
+    padding-left: var(--main-padding);
+
+    display: flex;
+    align-items: center;
+}
+.prompt.active .prompt-text {
+    background: var(--accent);
+    /*  TODO: variable for color which is text on accent  */
+    color: black;
+}
+.prompt:not(.active) .prompt-text {
+    background: var(--background);
+    color: var(--text);
+    border-top: 2px solid var(--accent);
+    border-bottom: 2px solid var(--accent);
+}
+
+
+
 .prompt span {
     /*padding-top: 5px;*/
     /*padding-bottom: 5px;   */
 }
 
-#prompt-color-left {
+
+
+/*#prompt-color-left {
     grid-column: 1 / prompt;
     grid-row: prompt-command / padding-bottom;
 }
 #prompt-color-bottom {
     grid-column: 1 / -1;
     grid-row: padding-bottom / end;
-}
+}*/
+
 #triangle {
     display: inline-block;
-    width: 25px;
+/*    width: 25px;*/
     height: 100%;
+}
+.prompt.active #triangle {
     background: var(--accent);
 }
-#triangle path {
-  fill: var(--background);
+.prompt:not(.active) {
+    background: transparent;
+}
+.prompt.docked #triangle {
+    width: 2em;
+}
+.prompt:not(.docked) #triangle {
+    width: 1em;
+}
+
+/*.prompt #triangle path {
+    vector-effect: non-scaling-stroke;
+}*/
+.prompt.active #triangle path {
+    fill: var(--background);
+}
+.prompt:not(.active) #triangle {
+    /*  Hack to align the SVG triangle line with the border  */
+    position: relative;
+    left: -1px;
+}
+.prompt:not(.active) #triangle path {
+    fill: transparent;
+    stroke: var(--accent);
+    stroke-width: 2px;
+}
+
+.command-text {
+    display: flex;
+    align-items: center;
+
+    padding-left: 3px;
 }
 
 #command-input {

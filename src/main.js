@@ -36,12 +36,11 @@ class Tab extends Component {
 // isActive is true if this is the active prompt
 // In the future this will take more complex arguments but for now it's just text
 const Prompt = ({ isActive, promptText }) => {
-  const isDocked = false;
+  const isDocked = false; // TODO: This will be passed in here, since the whole command is either docked or not
   if (!isActive && isDocked) throw new Error("Can't dock non-active prompt.");
   return (
-    <div class={c("prompt", isDocked ? "docked" : "undocked", isActive && "active")}>
-      <span class="sidebar-overflow-span"></span>
-      <span class="prompt-color">{promptText}</span>
+    <div class={c("prompt", isActive && "active")}>
+      <div class="prompt-text"><span>{promptText}</span></div>
       <span id="triangle">
       {
         isDocked ?
@@ -53,7 +52,12 @@ const Prompt = ({ isActive, promptText }) => {
         :
           <svg version="1.1" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 500 500" preserveAspectRatio="none">
             <g>
-              <path d="M0,0L500,250L0,500"></path>
+              {/* 450 instead of 500 here so that the corner doesn't clip */}
+              {/*
+                We really want this stroke to be drawn inside the path but the SVG spec people are cowards
+                Right now we hack by shifting the element left 1 pixel.
+                We should see about doubling the stroke and using a clipping mask to remove the outside. */}
+              <path d="M0,0L450,250L0,500" vector-effect="non-scaling-stroke" stroke-linejoin="round"></path>
             </g>
           </svg>
       }
@@ -154,6 +158,26 @@ commandInput.addEventListener("keypress", function (event) {
   }
 });
 
+// -- auto-scroll magic --
+
+// This function is called after hitting Enter
+// If we're scrolled-past-end (if the prompt isn't docked), then it does nothing
+// In the normal case, (which is that we've just ran a command that's created a bunch of output,
+//  so we won't be at the bottom of the scrollback anymore), this function scrolls us so that the prompt is
+//  right below the bottom of the scrollback
+function scrollToBottom () {
+  // The container that's scrolling
+  const scrollEl = document.getElementById("content");
+  // content is our scroll-container, so this is the total scroll height that we're working with
+  const contentScrollHeight = scrollEl.scrollHeight;
+
+  // TODO: how do we calculate this
+  const newScrollHeight = 500;
+  scrollback.scrollTo(0, newScrollHeight);
+}
+
+// TODO: Attach an event listener to detect when the prompt has docked or undocked and update the css class accordingly.
+
 // -- Prompt-always-focused --
 // On mouse up, if we don't have a selection, focus the prompt
 window.addEventListener("mouseup", function () {
@@ -184,4 +208,5 @@ document.addEventListener("DOMContentLoaded", function () {
   console.log("DOMContentLoaded fired");
   commandInput.focus();
 });
+
 
