@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 
 // Traits can only be used if they're in scope ;)
-use std::io::Read;
+use std::io::{Read, Write};
 
 use std::sync::{Mutex};
 
@@ -76,6 +76,7 @@ struct RunningProcesses {
     map: Mutex<HashMap<String, RunningProcess>>
 }
 
+
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
 #[tauri::command]
 fn execute(window: Window, command: &str, id: &str, running_processes: State<RunningProcesses>) -> String {
@@ -87,11 +88,11 @@ fn execute(window: Window, command: &str, id: &str, running_processes: State<Run
 
     println!("Running {}", exe);
 
-    let child_attempt = Command::new(exe)
-        .args(parts)
+    let child_attempt = Command::new("sh")
+        // .args(parts)
         .stdout(Stdio::piped())
+        .stdin(Stdio::piped())
         .spawn();
-
 
     if let Err(ref e) = child_attempt {
         // On Mac, running a command which doesn't exist gives
@@ -106,6 +107,13 @@ fn execute(window: Window, command: &str, id: &str, running_processes: State<Run
     }
 
     let mut child = child_attempt.unwrap();
+
+    let mut child_stdin = child.stdin.take().unwrap();
+    // TODO: Create an tab or process group object, create a command to create one of those,
+    //  give them some ID, have the frontend specify the process to run the command in
+    //  save the stdin into the process object in rust, write to std in when we get a command
+    // simple!
+    child_stdin.write(b"echo hello\n");
 
     let mut child_stdout = child.stdout.take().unwrap();
 

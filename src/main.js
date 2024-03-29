@@ -170,6 +170,9 @@ function scrollToBottom () {
   const scrollEl = document.getElementById("content");
   // content is our scroll-container, so this is the total scroll height that we're working with
   const contentScrollHeight = scrollEl.scrollHeight;
+  // scrollEl.scrollTop ranges from 0 (when we're at the top), to scrollEl.scrollHeight - scrollEl.clientHeight
+  //  which makes sense: our max scroll position is when the top of the element is it's height away from the bottom
+
 
   // TODO: how do we calculate this
   const newScrollHeight = 500;
