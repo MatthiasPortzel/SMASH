@@ -40,15 +40,15 @@ use std::thread::JoinHandle;
 // Read and kill the child both require a mutable reference and Rust is designed to prevent me from getting two mutable references at the same time, so I can't kill it while reading.
 
 
-// Written by ChatGTP so it can't be wrong
-
 // Since this is a Tauri state global, we, can only have interior mutability
-struct RunningProcess {
-    child: Child,
-    monitor_thread: JoinHandle<()>,
+struct Session {
+    is_running: bool,
+    cwd: String,
+    child: Option<Child>,
+    monitor_thread: Option<JoinHandle<()>>,
 }
 
-impl RunningProcess {
+impl Session {
     // fn new(child: Child, monitor_thread: JoinHandle<()>) -> Self {
     //     RunningProcess {
     //         child,
@@ -59,37 +59,80 @@ impl RunningProcess {
     fn kill(mut self) -> std::io::Result<()> {
         // Kill both the child process and the monitor thread
         // TODO: I'd rather return an error (since we're already returning a result) instead of panicking here
-        // self.child.lock().unwrap().kill()?;
-        // lock().unwrap() handles getting the lock, then we have an optional
-        // self.child.lock().unwrap().as_mut().unwrap().kill()?;
-        self.child.kill()?;
-        // This lock shouldn't be a problem since this should only be called from the main thread
-        // works
-        // self.monitor_thread.lock().unwrap().take().unwrap().join().expect("Failed to join monitor thread");
-        self.monitor_thread.join().expect("Failed to join monitor thread");
+
+        // Just swallow error
+        if !self.is_running {
+            return Ok(());
+        }
+
+        // .expect("Tried to kill but no child")
+        self.child.unwrap().kill()?;
+        // .expect("is an expect better than an unwrap if I don't give an error message?")
+        self.monitor_thread.unwrap().join().expect("Failed to join monitor thread");
+
+        self.is_running = false;
+        // TODO: Do I need to set monitor_thread or child to None?
 
         Ok(())
     }
 }
 
-struct RunningProcesses {
-    map: Mutex<HashMap<String, RunningProcess>>
+struct ActiveSessions {
+    map: Mutex<HashMap<String, Session>>
 }
 
 
+#[tauri::command]
+fn create_session (id: &str, active_sessions: State<ActiveSessions>) -> String {
+    let mut map = active_sessions.map.lock().unwrap();
+    map.insert(
+        id.to_string(),
+        Session {
+            cwd: "/Users/matthias".to_string(),
+            is_running: false,
+            child: None,
+            monitor_thread: None
+        }
+    );
+
+    "created".to_string()
+}
+
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
 #[tauri::command]
-fn execute(window: Window, command: &str, id: &str, running_processes: State<RunningProcesses>) -> String {
+fn execute (window: Window, command: &str, id: &str, active_sessions: State<ActiveSessions>) -> String {
     let mut parts = command.trim().split_whitespace();
+
+    // Get the session for the given ID
+    // This needs to be broken out for lifetime reasons which is dumb.
+    let mut map = active_sessions.map.lock().unwrap();
+    let session = map.get_mut(id).expect(&("failed to get session with id ".to_string() + id));
+
+    // // Error if it's already running a program
+    // if session.is_running {
+    //     return "already running".to_string();
+    // }
 
     // Use "ls" as the default command if you enter nothing.
     // Eventually this will be configurable
     let exe = parts.next().unwrap_or("ls");
 
+    if exe == "cd" {
+        session.cwd = parts.next().unwrap_or("/Users/matthias").to_string();
+
+        // TODO: Please error if the directory doesn't exist.
+
+        // Then we don't need to do anything else
+        // This is the current value that indicates "no error"
+        // TODO: we should return the new working directory so that JS can do stuff with it.
+        return "executing".to_string();
+    }
+
     println!("Running {}", exe);
 
-    let child_attempt = Command::new("sh")
-        // .args(parts)
+    let child_attempt = Command::new(exe)
+        .current_dir(&session.cwd)
+        .args(parts)
         .stdout(Stdio::piped())
         .stdin(Stdio::piped())
         .spawn();
@@ -108,18 +151,23 @@ fn execute(window: Window, command: &str, id: &str, running_processes: State<Run
 
     let mut child = child_attempt.unwrap();
 
-    let mut child_stdin = child.stdin.take().unwrap();
-    // TODO: Create an tab or process group object, create a command to create one of those,
-    //  give them some ID, have the frontend specify the process to run the command in
-    //  save the stdin into the process object in rust, write to std in when we get a command
-    // simple!
-    child_stdin.write(b"echo hello\n");
+    // let mut child_stdin = child.stdin.take().unwrap();
+    // // TODO: Create an tab or process group object, create a command to create one of those,
+    // //  give them some ID, have the frontend specify the process to run the command in
+    // //  save the stdin into the process object in rust, write to std in when we get a command
+    // // simple!
+    // child_stdin.write(b"echo hello\n");
+
+    // // If I understand this right, this should work
+    // child_stdin.write(b"echo hello\n");
 
     let mut child_stdout = child.stdout.take().unwrap();
 
     // Need to copy this so that we can use it in the thread
     // We can't copy it in the thread because we can't use `id` in the thread (or `id` gets moved into the thread)
     let id_copy = id.to_string();
+    let sessions_ref = &active_sessions;
+
 
     // Need to spawn a thread in order to poll the child io and dispatch events to JS
     let thread_handle = std::thread::spawn(move || {
@@ -143,6 +191,14 @@ fn execute(window: Window, command: &str, id: &str, running_processes: State<Run
                     // Read EOF
                     // We read EOF at the end of the process's output, or when the process has been killed
                     let _ = window.emit("eof", id_copy.clone());
+
+                    // TODO: Need an Arc around ActiveSessions so that I can copy a reference to it into here
+                    // // we need to take a lock on the process and reset it
+                    // let active_sessions_inner: ActiveSessions = tauri::Manager::state();
+                    // let mut map = active_sessions_inner.map.lock().expect("Failed to get lock on mutex from watching thread");
+                    // let session = map.get_mut(&id_copy).expect("No session with id");
+
+                    // session.is_running = false;
 
                     // Ends the loop and the thread
                     break;
@@ -180,20 +236,24 @@ fn execute(window: Window, command: &str, id: &str, running_processes: State<Run
 
     // We take a lock on the whole running_processes map here, which feels weird, but I think is needed.
     // And it's totally fine since this lock isn't used in the thread, so it's only locked for the fraction of a second that it takes to start the process and put it in the map
-    running_processes.map.lock().unwrap().insert(
-       id.to_string(),
-       RunningProcess {
-            child: child, // move ownership of the child into the HashMap
-            monitor_thread: thread_handle
-       }
-    );
+    // running_processes.map.lock().unwrap().insert(
+    //    id.to_string(),
+    //    RunningProcess {
+    //         child: child, // move ownership of the child into the HashMap
+    //         monitor_thread: thread_handle
+    //    }
+    // );
+
+    session.is_running = true;
+    session.child = Some(child);
+    session.monitor_thread = Some(thread_handle);
 
     // I think we need to return something. I guess I should check if I actually do
     "executing".to_string()
 }
 
 #[tauri::command]
-fn kill(target: &str, running_processes: State<RunningProcesses>) {
+fn kill(target: &str, running_processes: State<ActiveSessions>) {
     // Just send control-C to the target
     // running_process.inner().kill();
 
@@ -227,8 +287,8 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         // .manage(RunningProcess { child: Default::default(), monitor_thread: Default::default() })
-        .manage(RunningProcesses { map: Default::default() })
-        .invoke_handler(tauri::generate_handler![execute, kill])
+        .manage(ActiveSessions { map: Default::default() })
+        .invoke_handler(tauri::generate_handler![execute, kill, create_session])
         // .invoke_handler(tauri::generate_handler![])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

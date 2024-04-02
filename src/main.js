@@ -22,7 +22,14 @@ const scrollback = document.querySelector("#scrollback");
 
 const commandInput = document.querySelector("#command-input");
 
-const runningCommands = {};
+// TODO: I need a frontend refactor to support multiple tabs/sessions--backend should support it
+let runningCommand = null;
+const globalSessionId = "main-session";
+
+function createSession () {
+  invoke("create_session", { id: globalSessionId });
+}
+createSession();
 
 // Has a scrollback which is a list of command instance
 // Has a name
@@ -68,10 +75,9 @@ const Prompt = ({ isActive, promptText }) => {
 
 //
 class CommandInstance {
-  constructor(prompt, commandText, processId) {
+  constructor(prompt, commandText) {
     this.prompt = prompt;
     this.commandText = commandText;
-    this.processId = processId;
     this.processOutput = "";
     this.outputEl = undefined;
   }
@@ -106,17 +112,17 @@ class CommandInstance {
 
 // We only need control+c and control+d as "native" keyboard shortcuts. Linux FB console only supports those and control+z, which is more trouble than its worth
 
-async function executeCommand (commandText, id) {
+async function executeCommand (commandText) {
   // This doesn't wait for the command to finish, it waits for the backend to spawn the process
-  const res = await invoke("execute", { command: commandText, id: id });
+  const res = await invoke("execute", { command: commandText, id: globalSessionId });
 
-  const command = new CommandInstance("<TODO: Get prompt here>", commandText, id);
-  runningCommands[id] = command;
+  const command = new CommandInstance("<TODO: Get prompt here>", commandText);
+  runningCommand = command;
 
   // false for don't replace existing elements
   render(command.getJSX(), scrollback, false);
 
-  console.log(runningCommands);
+  // console.log(runningCommands);
 
   // Now, if we failed to start the command, then we won't ever get data, so we can print an error message now
   if (res !== "executing") {
@@ -129,15 +135,15 @@ async function executeCommand (commandText, id) {
   }
 }
 
-function killCommand (id) {
-  invoke("kill", { target: id} );
+function killCommand () {
+  invoke("kill", { target: globalSessionId} );
 }
 
 // We can only have one process running at a time, so we just need one event listener for buffering stdin messages
 listen("data", function (event) {
   console.log("got data", event);
-  const [target_id, data] = event.payload;
-  runningCommands[target_id].appendOutput(data.map(b => String.fromCharCode(b)).join(""))
+  const [sessionId, data] = event.payload;
+  runningCommand.appendOutput(data.map(b => String.fromCharCode(b)).join(""))
 });
 
 listen("eof", function (event) {
@@ -152,7 +158,7 @@ listen("eof", function (event) {
 commandInput.addEventListener("keypress", function (event) {
   // console.log(event)
   if (event.key === "Enter") {
-    executeCommand(commandInput.textContent, Math.random().toFixed(10));
+    executeCommand(commandInput.textContent);
     event.preventDefault();
     commandInput.textContent = "";
   }
