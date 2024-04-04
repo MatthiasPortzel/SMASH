@@ -99,7 +99,7 @@ class CommandInstance {
     this.processOutput += text;
     this.outputEl.textContent += text;
 
-    scrollToBottom();
+    updateScroll();
   }
 }
 
@@ -135,7 +135,7 @@ async function executeCommand (commandText) {
     // // Remove from runningCommands
     // delete runningCommands[id];
   }else {
-    scrollToBottom();
+    updateScroll();
   }
 }
 
@@ -170,12 +170,23 @@ commandInput.addEventListener("keypress", function (event) {
 
 // -- auto-scroll magic --
 
+let scrollNeedsUpdate = false;
+
+// For performance, we don't want to actually update the scroll every time we get new characters
+function updateScroll () {
+  scrollNeedsUpdate = true;
+  window.requestAnimationFrame(scrollToBottom);
+}
+
 // This function is called after hitting Enter
 // If we're scrolled-past-end (if the prompt isn't docked), then it does nothing
 // In the normal case, (which is that we've just ran a command that's created a bunch of output,
 //  so we won't be at the bottom of the scrollback anymore), this function scrolls us so that the prompt is
 //  right below the bottom of the scrollback
 function scrollToBottom () {
+  if (!scrollNeedsUpdate) return;
+  scrollNeedsUpdate = false;
+
   // The container that's scrolling
   const scrollEl = document.getElementById("content");
   // content is our scroll-container, so scrollEl.scrollHeight is the total scroll height that we're working with
