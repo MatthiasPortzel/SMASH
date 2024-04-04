@@ -98,6 +98,8 @@ class CommandInstance {
   appendOutput (text) {
     this.processOutput += text;
     this.outputEl.textContent += text;
+
+    scrollToBottom();
   }
 }
 
@@ -132,6 +134,8 @@ async function executeCommand (commandText) {
     // I think I should rename runningCommand to commands and use it to track finished commands as well.
     // // Remove from runningCommands
     // delete runningCommands[id];
+  }else {
+    scrollToBottom();
   }
 }
 
@@ -143,7 +147,7 @@ function killCommand () {
 listen("data", function (event) {
   console.log("got data", event);
   const [sessionId, data] = event.payload;
-  runningCommand.appendOutput(data.map(b => String.fromCharCode(b)).join(""))
+  runningCommand.appendOutput(data.map(b => String.fromCharCode(b)).join(""));
 });
 
 listen("eof", function (event) {
@@ -174,15 +178,42 @@ commandInput.addEventListener("keypress", function (event) {
 function scrollToBottom () {
   // The container that's scrolling
   const scrollEl = document.getElementById("content");
-  // content is our scroll-container, so this is the total scroll height that we're working with
-  const contentScrollHeight = scrollEl.scrollHeight;
+  // content is our scroll-container, so scrollEl.scrollHeight is the total scroll height that we're working with
+
+  // The prompt wrapper command thing
+  const commandEl = document.getElementById("command");
+
+  // If the prompt isn't at the bottom, don't scroll at all.
+  // There's an easy way and a hard way to do this, we're going to do it the easy way
+  // If the top of the element on the screen is below the height of the contentEl - the element's height
+  const commandAtBottom = commandEl.getClientRects()[0].top >= scrollEl.clientHeight - commandEl.clientHeight;
+  if (!commandAtBottom) return;
+
   // scrollEl.scrollTop ranges from 0 (when we're at the top), to scrollEl.scrollHeight - scrollEl.clientHeight
   //  which makes sense: our max scroll position is when the top of the element is it's height away from the bottom
+  // It's the distance above the top of the screen that the content starts
 
+  // This is the amount of space that exists under the prompt
+  const scrollPastEndHeight = parseInt(getComputedStyle(commandEl).marginBottom, 10);
+  // Or equivalently, scrollEl.clientHeight - commandEl.clientHeight
 
-  // TODO: how do we calculate this
-  const newScrollHeight = 500;
-  scrollback.scrollTo(0, newScrollHeight);
+  // Scrolling to this location would put the prompt at the bottom of the screen
+  const newPromptLocation = scrollEl.scrollHeight - scrollEl.clientHeight - scrollPastEndHeight;
+  // We want to do that if the output is less than a full screen worth
+  let newScrollTop = newPromptLocation;
+
+  const lastCommand = document.querySelector("#scrollback .command:last-of-type");
+  // The current position lastCommand in the viewport is lastCommand.getClientRects()[0].top
+  // It would be off of the screen if we're planning on scrolling down by more than it currently is on the screen
+  const wouldBeOffScreen = (newScrollTop - scrollEl.scrollTop) > lastCommand.getClientRects()[0].top;
+  // If that would put the last ran command off of the screen
+  if (wouldBeOffScreen) {
+    // Then we want to scroll such that that command is just barely on screen
+    newScrollTop = lastCommand.getClientRects()[0].top + scrollEl.scrollTop;
+  }
+
+  // This is the new value for scrollTop, basically
+  scrollEl.scrollTo({ top: newScrollTop, behavior: "smooth" });
 }
 
 // TODO: Attach an event listener to detect when the prompt has docked or undocked and update the css class accordingly.
