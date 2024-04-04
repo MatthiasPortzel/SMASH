@@ -50,7 +50,7 @@ In this phase, we're not doing built or tagged releases.
  - [ X ] Sick appearance
  - [ X ] Ability to run commands on Enter
  - [   ] Ability to kill commands with control+c
- - [   ] Ability to cd
+ - [ X ] Ability to cd
  - [   ] Multiple tabs
  - [   ] SSH
 

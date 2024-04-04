@@ -188,6 +188,8 @@ function scrollToBottom () {
 // TODO: Attach an event listener to detect when the prompt has docked or undocked and update the css class accordingly.
 
 // -- Prompt-always-focused --
+// TODO: Need to save the current cursor so that we can restore it instead of sending you to the front
+// TODO: Tab de-focuses the prompt
 // On mouse up, if we don't have a selection, focus the prompt
 window.addEventListener("mouseup", function () {
   const selection = window.getSelection();
@@ -217,5 +219,3 @@ document.addEventListener("DOMContentLoaded", function () {
   console.log("DOMContentLoaded fired");
   commandInput.focus();
 });
-
-

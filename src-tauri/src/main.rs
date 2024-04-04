@@ -5,6 +5,10 @@ use std::process::Command;
 use std::process::{Stdio,Child};
 use std::collections::HashMap;
 
+use std::path::PathBuf;
+
+use resolve_path::PathResolveExt;
+
 
 // Traits can only be used if they're in scope ;)
 use std::io::{Read, Write};
@@ -43,7 +47,7 @@ use std::thread::JoinHandle;
 // Since this is a Tauri state global, we, can only have interior mutability
 struct Session {
     is_running: bool,
-    cwd: String,
+    cwd: PathBuf,
     child: Option<Child>,
     monitor_thread: Option<JoinHandle<()>>,
 }
@@ -88,7 +92,7 @@ fn create_session (id: &str, active_sessions: State<ActiveSessions>) -> String {
     map.insert(
         id.to_string(),
         Session {
-            cwd: "/Users/matthias".to_string(),
+            cwd: "/Users/matthias".to_string().into(),
             is_running: false,
             child: None,
             monitor_thread: None
@@ -118,14 +122,21 @@ fn execute (window: Window, command: &str, id: &str, active_sessions: State<Acti
     let exe = parts.next().unwrap_or("ls");
 
     if exe == "cd" {
-        session.cwd = parts.next().unwrap_or("/Users/matthias").to_string();
+        let arg = parts.next().unwrap_or("/Users/matthias").to_string();
 
-        // TODO: Please error if the directory doesn't exist.
+        let new_cwd = arg.resolve_in(&session.cwd).to_path_buf();
 
-        // Then we don't need to do anything else
-        // This is the current value that indicates "no error"
-        // TODO: we should return the new working directory so that JS can do stuff with it.
-        return "executing".to_string();
+        if let Ok(new_path) = new_cwd.canonicalize() {
+            session.cwd = new_path;
+
+            // Then we don't need to do anything else
+            // This is the current value that indicates "no error"
+            // TODO: we should return the new working directory so that JS can do stuff with it.
+            return "executing".to_string();
+        }else {
+            // Error if the directory doesn't exist.
+            return "Directory doesn't exist or you don't have permission to read it".to_string();
+        }
     }
 
     println!("Running {}", exe);
