@@ -21,7 +21,7 @@ Some features that SMASH can offer because of its design:
 * Pop-up (IDE-style) auto-completion suggestions and fast syntax highlighting at the prompt
 * GUI shell configuration and shell settings taking effect without restarting your session
 
-While many features that are required for SMASH to be usable every-day are not yet implemented, you can try out the basic interface paradigm already, and decided if natural editing at the terminal is something you're interested in.
+While many features that are required for SMASH to be usable every-day are not yet implemented, you can try out the basic interface paradigm already, and decide if natural editing at the terminal is something you're interested in.
 
 ### Things that make the terminal appealing (SMASH will maintain all of these)
 
@@ -118,6 +118,6 @@ I will casually use "prompt" to refer to the prompt and the corresponding comman
 
 ## Copyright
 SMASH is GPLv3.
-Future versions of SMASH may be licensed differently and you may asked to transfer copyright ownership of contributions to allow this.
+Future versions of SMASH may be licensed differently and you may be asked to transfer copyright ownership of contributions to allow this.
 
 SMASH makes use of code from tauri, tauri-actions, serde, and resolve-path, all of which are licensed under the MIT license.
