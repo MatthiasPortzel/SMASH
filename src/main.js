@@ -20,6 +20,9 @@ const scrollback = document.querySelector("#scrollback");
 // We need to be able to CSS style the prompt in the scrollback (but maintain rule 4: non-iterative)
 // We're going to have to refactor the display at some point, either to improve performance or color or wrapping
 
+/*  TODO: Intercept paste events and make sure you can only type plaintext.
+  We want to preserve the ability for there to be richtext (i.e. don't make it a textarea)
+  so that we can style e.g. invalid commands or quotes or whatever   */
 const commandInput = document.querySelector("#command-input");
 
 // TODO: I need a frontend refactor to support multiple tabs/sessions--backend should support it
