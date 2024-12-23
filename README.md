@@ -39,8 +39,7 @@ I don't want to promise to never support these things. It's possible that they w
 * VI keybindings at the prompt
 
 ## Why is this made with web-tech. Browsers are slow
-First, keypress latency is faster in SMASH than in iTerm2 on my computer.
-Second, SMASH does not have speed as a primary objective (like some GPU-based terminals). However, SMASH should always feel lightweight and fast. If you have a benchmark identifying a performance bottleneck in SMASH, file a bug. Components can be incrementally moved to the Rust backend for speed. If it becomes evident that it is not possible to design a responsive application with web tech, I am not opposed to replacing the frontend.
+SMASH does not have speed as a primary objective (like some GPU-based terminals). However, SMASH should always feel lightweight and fast. If you have a benchmark identifying a performance bottleneck in SMASH, file a bug. Components can be incrementally moved to the Rust backend for speed. If it becomes evident that it is not possible to design a responsive application with web tech, I am not opposed to replacing the frontend.
 
 ## Milestones
 
