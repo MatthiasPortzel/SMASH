@@ -44,10 +44,14 @@ use std::thread::JoinHandle;
 // Read and kill the child both require a mutable reference and Rust is designed to prevent me from getting two mutable references at the same time, so I can't kill it while reading.
 
 
-// Since this is a Tauri state global, we, can only have interior mutability
+// Since this is a Tauri state global, we can only have interior mutability
+// On the server side, we don't track previous commands, but we do track active sessions
+// Sessions are stored in ActiveSessions, a Tauri state object.
+// The session id is the key in the ActiveSessions hashmap
 struct Session {
     is_running: bool,
     cwd: PathBuf,
+    command_id: Option<u64>, // The numerical id of the current command. None if there's no command running. This is a u64 to fit JS's 53 bit ints, but I don't know what the tradeoffs are
     child: Option<Child>,
     monitor_thread: Option<JoinHandle<()>>,
 }
@@ -82,18 +86,20 @@ impl Session {
 }
 
 struct ActiveSessions {
-    map: Mutex<HashMap<String, Session>>
+    map: Mutex<HashMap<u64, Session>>
 }
 
 
 #[tauri::command]
-fn create_session (id: &str, active_sessions: State<ActiveSessions>) -> String {
+fn create_session (session_id: u64, active_sessions: State<ActiveSessions>) -> String {
+    println!("creating session with id {}", session_id);
     let mut map = active_sessions.map.lock().unwrap();
     map.insert(
-        id.to_string(),
+        session_id,
         Session {
             cwd: "/Users/matthias".to_string().into(),
             is_running: false,
+            command_id: None,
             child: None,
             monitor_thread: None
         }
@@ -104,13 +110,13 @@ fn create_session (id: &str, active_sessions: State<ActiveSessions>) -> String {
 
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
 #[tauri::command]
-fn execute (window: Window, command: &str, id: &str, active_sessions: State<ActiveSessions>) -> String {
+fn execute (window: Window, command: &str, session_id: u64, command_id: u64, active_sessions: State<ActiveSessions>) -> String {
     let mut parts = command.trim().split_whitespace();
 
     // Get the session for the given ID
     // This needs to be broken out for lifetime reasons which is dumb.
     let mut map = active_sessions.map.lock().unwrap();
-    let session = map.get_mut(id).expect(&("failed to get session with id ".to_string() + id));
+    let session = map.get_mut(&session_id).expect(&("failed to get session with id ".to_string() + &(session_id.to_string())));
 
     // // Error if it's already running a program
     // if session.is_running {
@@ -174,9 +180,9 @@ fn execute (window: Window, command: &str, id: &str, active_sessions: State<Acti
 
     let mut child_stdout = child.stdout.take().unwrap();
 
-    // Need to copy this so that we can use it in the thread
-    // We can't copy it in the thread because we can't use `id` in the thread (or `id` gets moved into the thread)
-    let id_copy = id.to_string();
+    // // Need to copy this so that we can use it in the thread
+    // // We can't copy it in the thread because we can't use `id` in the thread (or `id` gets moved into the thread)
+    // let id_copy = session_id;
     let sessions_ref = &active_sessions;
 
 
@@ -193,17 +199,19 @@ fn execute (window: Window, command: &str, id: &str, active_sessions: State<Acti
             //  command outputs one byte at a time, so it's not a big deal
 
             // The semantics I really want is "read as much as is ready if it's ready—do not block"
-            // Then I can "poll" on my own time and still accept other signals
+            // Then I can alternate checking stdout and stdin, or receive other commands from the application (if eventually needed)
 
             // But this blocks
+            // This is really annoying because for commands with no output, like `cd`, it blocks forever, even after the process has exited.
             println!("Reading a byte");
             match child_stdout.read(&mut byte) {
                 Ok(0) => {
                     // Read EOF
                     // We read EOF at the end of the process's output, or when the process has been killed
-                    let _ = window.emit("eof", id_copy.clone());
+                    let _ = window.emit("eof", session_id);
 
-                    // TODO: Need an Arc around ActiveSessions so that I can copy a reference to it into here
+                    // TODO: Need to access ActiveSessions but we're in a separate thread.
+                    // https://tauri.app/develop/state-management/#access-state-with-the-manager-trait
                     // // we need to take a lock on the process and reset it
                     // let active_sessions_inner: ActiveSessions = tauri::Manager::state();
                     // let mut map = active_sessions_inner.map.lock().expect("Failed to get lock on mutex from watching thread");
@@ -232,7 +240,7 @@ fn execute (window: Window, command: &str, id: &str, active_sessions: State<Acti
                     // }
 
                     // Pass tuple with both ID and data
-                    let _ = window.emit("data", (id_copy.clone(), byte));
+                    let _ = window.emit("data", (session_id, command_id, byte));
                 }
                 Err(_error) => {
                     println!("Errored?");
@@ -264,7 +272,7 @@ fn execute (window: Window, command: &str, id: &str, active_sessions: State<Acti
 }
 
 #[tauri::command]
-fn kill(target: &str, running_processes: State<ActiveSessions>) {
+fn kill(target: u64, running_processes: State<ActiveSessions>) {
     // Just send control-C to the target
     // running_process.inner().kill();
 
@@ -288,7 +296,7 @@ fn kill(target: &str, running_processes: State<ActiveSessions>) {
     //     .join().expect("Failed to join monitor thread");
 
     // Move the running process out of the HashMap, so we own it
-    let process = running_processes.map.lock().unwrap().remove(target);
+    let process = running_processes.map.lock().unwrap().remove(&target);
     // Would love to do error handling and propagate this error but I don't know how to write the type signatures for this function
     // I also don't understand the difference between a Result and Error and Option and panicking.
     let _ = process.unwrap().kill();

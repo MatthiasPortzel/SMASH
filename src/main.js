@@ -4,6 +4,13 @@ import { listen } from "@tauri-apps/api/event"
 import { render, h } from "nano-jsx/esm/core.js";
 import { Component } from "nano-jsx/esm/component.js";
 
+function assert(bool, invariant) {
+  if (!bool) {
+    debugger;
+    throw invariant;
+  }
+}
+
 // The class-names helper
 const c = (...classNames) => classNames.filter(v => v).join(" ");
 
@@ -27,10 +34,11 @@ const commandInput = document.querySelector("#command-input");
 
 // TODO: I need a frontend refactor to support multiple tabs/sessions--backend should support it
 let runningCommand = null;
-const globalSessionId = "main-session";
+const globalSessionId = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER); // Generate a unique random ID for this page load
+// Each session has an id, and then the
 
 function createSession () {
-  invoke("create_session", { id: globalSessionId });
+  invoke("create_session", { sessionId: globalSessionId });
 }
 createSession();
 
@@ -77,12 +85,15 @@ const Prompt = ({ isActive, promptText }) => {
 }
 
 //
+let commandCount = 0;
 class CommandInstance {
   constructor(prompt, commandText) {
     this.prompt = prompt;
     this.commandText = commandText;
     this.processOutput = "";
     this.outputEl = undefined;
+    this.id = commandCount++;
+    this.running = false;
   }
 
   // TODO: CSS
@@ -102,7 +113,7 @@ class CommandInstance {
     this.processOutput += text;
     this.outputEl.textContent += text;
 
-    updateScroll();
+    queueScrollUpdate();
   }
 }
 
@@ -115,17 +126,23 @@ class CommandInstance {
 //      A line is 18 pixels right now, we want to support like up to 100,000 lines, so 18,000,000px
 // I need to figure out how I'm doing wrapping and paging, `less -S` should be obsolete
 
-// We only need control+c and control+d as "native" keyboard shortcuts. Linux FB console only supports those and control+z, which is more trouble than its worth
+// We only need control+c and control+d as "native" keyboard shortcuts. Linux FB console only supports those and control+z (backgrounding, not undo), which is more trouble than its worth
 
 async function executeCommand (commandText) {
-  // This doesn't wait for the command to finish, it waits for the backend to spawn the process
-  const res = await invoke("execute", { command: commandText, id: globalSessionId });
+  assert(runningCommand === null, "Can't run a new command with a running command");
 
   const command = new CommandInstance("<TODO: Get prompt here>", commandText);
   runningCommand = command;
 
+  // This doesn't wait for the command to finish, it waits for the backend to spawn the process
+  const res = await invoke("execute", { command: commandText, sessionId: globalSessionId, commandId: command.id });
+  console.log("setting command running", command);
+  command.running = true;
+
   // false for don't replace existing elements
   render(command.getJSX(), scrollback, false);
+  // Since the user has run the command, scroll to the bottom
+  queueScrollUpdate();
 
   // console.log(runningCommands);
 
@@ -137,8 +154,6 @@ async function executeCommand (commandText) {
     // I think I should rename runningCommand to commands and use it to track finished commands as well.
     // // Remove from runningCommands
     // delete runningCommands[id];
-  }else {
-    updateScroll();
   }
 }
 
@@ -149,13 +164,23 @@ function killCommand () {
 // We can only have one process running at a time, so we just need one event listener for buffering stdin messages
 listen("data", function (event) {
   console.log("got data", event);
-  const [sessionId, data] = event.payload;
+  const [sessionId, commandId, data] = event.payload;
+  if (sessionId !== globalSessionId) {
+    console.warn("Ignoring message from detached session.");
+    return;
+  }
+
+  assert(runningCommand !== null, "Got data, but the frontend doesn't have a running command.");
+  assert(runningCommand.running, "Running command needs to be running");
+  assert(commandId === runningCommand.id, `Data received for command #{commandId} should be the running command, but the running command is #${runningCommand.id}.`);
+
   runningCommand.appendOutput(data.map(b => String.fromCharCode(b)).join(""));
 });
 
 listen("eof", function (event) {
-  console.log("got eof", event);
-  // remove from runningCommands??
+  // console.log("got eof", event);
+  runningCommand.running = false;
+  runningCommand = null;
 });
 
 
@@ -163,11 +188,15 @@ listen("eof", function (event) {
 // invoke("execute", { command: "ruby /Users/matthias/Programs/SMASH/blocking-test.rb", id: "test-one" });
 
 commandInput.addEventListener("keypress", function (event) {
-  // console.log(event)
   if (event.key === "Enter") {
-    executeCommand(commandInput.textContent);
     event.preventDefault();
-    commandInput.textContent = "";
+    if (runningCommand !== null) {
+      // TODO: we need to handle this by pushing to a queue, but I'm not ready for that yet
+      console.warn("Ignoring enter with outstanding running command.");
+    } else {
+      executeCommand(commandInput.textContent);
+      commandInput.textContent = "";
+    }
   }
 });
 
@@ -176,9 +205,9 @@ commandInput.addEventListener("keypress", function (event) {
 let scrollNeedsUpdate = false;
 
 // For performance, we don't want to actually update the scroll every time we get new characters
-function updateScroll () {
+function queueScrollUpdate () {
   scrollNeedsUpdate = true;
-  window.requestAnimationFrame(scrollToBottom);
+  window.requestAnimationFrame(updateScroll);
 }
 
 // This function is called after hitting Enter
@@ -186,7 +215,7 @@ function updateScroll () {
 // In the normal case, (which is that we've just ran a command that's created a bunch of output,
 //  so we won't be at the bottom of the scrollback anymore), this function scrolls us so that the prompt is
 //  right below the bottom of the scrollback
-function scrollToBottom () {
+function updateScroll () {
   if (!scrollNeedsUpdate) return;
   scrollNeedsUpdate = false;
 

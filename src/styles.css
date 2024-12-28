@@ -6,10 +6,10 @@
     All text needs to be inset from the sides of the viewport by this amount. */
     --main-padding: 10px;
 
-    --accent: #FFF18A;
-    --background: #222222;
-    --command-input-background: color(display-p3 0.105 0.105 0.101);
-    --text: #FFFFFF;
+    --accent: #eed49f; /* Catppuccin Macchiato Yellow */
+    --background: #24273a; /* Catppuccin Macchiato Base */
+    --command-input-background: rgb(47.62, 51.04, 71.09); /* 7% text, on top of base; rgb(36 * 0.93 + 0.07 * 202, 39 * 0.93 + 0.07 * 211, 58 * 0.93 + 0.07 * 245) */
+    --text: #cad3f5; /* Catppuccin Macchiato Text */
 }
 
 *, ::before, ::after {
