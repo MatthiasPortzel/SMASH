@@ -4,15 +4,137 @@ import { listen } from "@tauri-apps/api/event"
 import { render, h } from "nano-jsx/esm/core.js";
 import { Component } from "nano-jsx/esm/component.js";
 
-function assert(bool, invariant) {
-  if (!bool) {
-    debugger;
-    throw invariant;
+// https://tauri.app/reference/javascript/shell/#methods
+// The main API is .spawn, .kill, and .write which forward to
+// https://docs.rs/shared_child/latest/shared_child/struct.SharedChild.html
+// It doesn't include support for signals, but signals are not a very nice interface so I'll pull in support for them on an ad-hoc basis
+import { Command } from '@tauri-apps/plugin-shell';
+
+import { assert } from "./util";
+
+// The class-names helper
+function c (...classNames) {
+  return classNames.filter(v => v).join(" ")
+};
+
+// Initialized to the absolute path to the resolved home directory on start
+// This could be robust against changing home directory while still being sync to access
+//  by having a "getHomeDir" that sent a request for the current home dir, but returned
+//  the last value in the meantime. Idk.
+// This also will need to be per-session to support ssh
+let HOME_DIR = null;
+invoke("resolve_path", { path: "~", cwd: "/" }).then((v) => {
+  HOME_DIR = v;
+  // Any activeSessions created before this promise resolved will have a null cwd (since they would have been initialized to the null HOME_DIR), so we update them
+  Array.from(activeSessions.values()).forEach(session => session.cwd = session.cwd || HOME_DIR);
+}).catch(console.error);
+
+let commandCount = 0;
+class CommandInstance {
+  constructor(prompt, commandText) {
+    this.prompt = prompt;
+    this.commandText = commandText;
+    this.processOutput = "";
+    this.outputEl = undefined;
+    this.id = commandCount++;
+    this.running = false;
+  }
+
+  // TODO: CSS
+  getJSX () {
+    return (
+      <div class="command">
+        <div class="prompt-line">
+          <Prompt isActive={false} promptText={this.prompt} />
+          <span class="command-text">{this.commandText}</span>
+        </div>
+        <pre class="process-output" ref={el => (this.outputEl = el)}>{this.processOutput}</pre>
+      </div>
+    );
+  }
+
+  appendOutput (text) {
+    this.processOutput += text;
+    this.outputEl.textContent += text;
+
+    queueScrollUpdate();
   }
 }
 
-// The class-names helper
-const c = (...classNames) => classNames.filter(v => v).join(" ");
+class Session {
+  constructor (cwd) {
+    this.runningCommand = null; // ?CommandInstance
+    this.cwd = HOME_DIR;
+  }
+
+  static generateId () {
+    // Generate a unique ID for a session.
+    // This will be the key in the activeSession map
+    return Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
+  }
+
+  async executeCommand (commandText) {
+    assert(this.runningCommand === null, "Can't run a new command with a running command");
+
+    const command = new CommandInstance("<TODO: Get prompt here>", commandText);
+    this.runningCommand = command;
+
+    // // This doesn't wait for the command to finish, it waits for the backend to spawn the process
+    // const res = await invoke("execute", { command: commandText, sessionId: globalSessionId, commandId: command.id });
+    // console.log("setting command running", command);
+
+    const command_parts = commandText.trim().split(/\s/g);
+    const exe = command_parts.shift() || "ls";
+
+    // cd has to be a shell-builtin, so we don't need to do anything in the backend (except resolve the path)
+    if (exe === "cd") {
+      const arg = command_parts.shift() || HOME_DIR;
+
+      console.log({ path: arg, cwd: this.cwd });
+
+      const new_cwd = await invoke("resolve_path", { path: arg, cwd: this.cwd });
+
+      console.log(new_cwd);
+
+      // TODO: Handle error condition here as well as on backend
+
+      self.cwd = new_cwd;
+      return;
+
+    } else
+
+    command.backendCommand = Command.create(exe, command_parts, {
+      cwd: this.cwd
+    });
+
+    command.running = true;
+
+
+    // false for don't replace existing elements
+    render(command.getJSX(), scrollback, false);
+    // Since the user has run the command, scroll to the bottom
+    queueScrollUpdate();
+
+    // console.log(runningCommands);
+
+    // Now, if we failed to start the command, then we won't ever get data, so we can print an error message now
+    if (res !== "executing") {
+      // Print the error message
+      command.appendOutput(res);
+      // Remove from runningCommands?
+      // I think I should rename runningCommand to commands and use it to track finished commands as well.
+      // // Remove from runningCommands
+      // delete runningCommands[id];
+    }
+  }
+}
+
+const activeSessions = new Map();
+const currentSession = new Session(); // This will be tied to the current tab eventually (e.g. currentTab.session)
+activeSessions.set(Session.generateId(), currentSession);
+
+
+// -- UI stuff -- //
 
 // querySelector instead of getById in case we have a more complicated selector in the future
 const scrollback = document.querySelector("#scrollback");
@@ -31,16 +153,6 @@ const scrollback = document.querySelector("#scrollback");
   We want to preserve the ability for there to be richtext (i.e. don't make it a textarea)
   so that we can style e.g. invalid commands or quotes or whatever   */
 const commandInput = document.querySelector("#command-input");
-
-// TODO: I need a frontend refactor to support multiple tabs/sessions--backend should support it
-let runningCommand = null;
-const globalSessionId = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER); // Generate a unique random ID for this page load
-// Each session has an id, and then the
-
-function createSession () {
-  invoke("create_session", { sessionId: globalSessionId });
-}
-createSession();
 
 // Has a scrollback which is a list of command instance
 // Has a name
@@ -84,39 +196,6 @@ const Prompt = ({ isActive, promptText }) => {
   );
 }
 
-//
-let commandCount = 0;
-class CommandInstance {
-  constructor(prompt, commandText) {
-    this.prompt = prompt;
-    this.commandText = commandText;
-    this.processOutput = "";
-    this.outputEl = undefined;
-    this.id = commandCount++;
-    this.running = false;
-  }
-
-  // TODO: CSS
-  getJSX () {
-    return (
-      <div class="command">
-        <div class="prompt-line">
-          <Prompt isActive={false} promptText={this.prompt} />
-          <span class="command-text">{this.commandText}</span>
-        </div>
-        <pre class="process-output" ref={el => (this.outputEl = el)}>{this.processOutput}</pre>
-      </div>
-    );
-  }
-
-  appendOutput (text) {
-    this.processOutput += text;
-    this.outputEl.textContent += text;
-
-    queueScrollUpdate();
-  }
-}
-
 // TODO:
 // * Standardize terminology (command / process / prompt / terminal etc) -- done
 // * Create class/object, that inherits Component, for storing commands that have already been run, their prompt, and their output -- done
@@ -127,35 +206,6 @@ class CommandInstance {
 // I need to figure out how I'm doing wrapping and paging, `less -S` should be obsolete
 
 // We only need control+c and control+d as "native" keyboard shortcuts. Linux FB console only supports those and control+z (backgrounding, not undo), which is more trouble than its worth
-
-async function executeCommand (commandText) {
-  assert(runningCommand === null, "Can't run a new command with a running command");
-
-  const command = new CommandInstance("<TODO: Get prompt here>", commandText);
-  runningCommand = command;
-
-  // This doesn't wait for the command to finish, it waits for the backend to spawn the process
-  const res = await invoke("execute", { command: commandText, sessionId: globalSessionId, commandId: command.id });
-  console.log("setting command running", command);
-  command.running = true;
-
-  // false for don't replace existing elements
-  render(command.getJSX(), scrollback, false);
-  // Since the user has run the command, scroll to the bottom
-  queueScrollUpdate();
-
-  // console.log(runningCommands);
-
-  // Now, if we failed to start the command, then we won't ever get data, so we can print an error message now
-  if (res !== "executing") {
-    // Print the error message
-    command.appendOutput(res);
-    // Remove from runningCommands?
-    // I think I should rename runningCommand to commands and use it to track finished commands as well.
-    // // Remove from runningCommands
-    // delete runningCommands[id];
-  }
-}
 
 function killCommand () {
   invoke("kill", { target: globalSessionId} );
@@ -190,11 +240,12 @@ listen("eof", function (event) {
 commandInput.addEventListener("keypress", function (event) {
   if (event.key === "Enter") {
     event.preventDefault();
-    if (runningCommand !== null) {
+
+    if (currentSession.runningCommand !== null) {
       // TODO: we need to handle this by pushing to a queue, but I'm not ready for that yet
       console.warn("Ignoring enter with outstanding running command.");
     } else {
-      executeCommand(commandInput.textContent);
+      currentSession.executeCommand(commandInput.textContent);
       commandInput.textContent = "";
     }
   }

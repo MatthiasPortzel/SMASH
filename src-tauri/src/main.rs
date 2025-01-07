@@ -6,6 +6,7 @@ use std::process::{Stdio,Child};
 use std::collections::HashMap;
 
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use resolve_path::PathResolveExt;
 
@@ -89,25 +90,6 @@ struct ActiveSessions {
     map: Mutex<HashMap<u64, Session>>
 }
 
-
-#[tauri::command]
-fn create_session (session_id: u64, active_sessions: State<ActiveSessions>) -> String {
-    println!("creating session with id {}", session_id);
-    let mut map = active_sessions.map.lock().unwrap();
-    map.insert(
-        session_id,
-        Session {
-            cwd: "/Users/matthias".to_string().into(),
-            is_running: false,
-            command_id: None,
-            child: None,
-            monitor_thread: None
-        }
-    );
-
-    "created".to_string()
-}
-
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
 #[tauri::command]
 fn execute (window: Window, command: &str, session_id: u64, command_id: u64, active_sessions: State<ActiveSessions>) -> String {
@@ -126,6 +108,8 @@ fn execute (window: Window, command: &str, session_id: u64, command_id: u64, act
     // Use "ls" as the default command if you enter nothing.
     // Eventually this will be configurable
     let exe = parts.next().unwrap_or("ls");
+
+// TODO: replace std command with tauri-plugin-shell
 
     if exe == "cd" {
         let arg = parts.next().unwrap_or("/Users/matthias").to_string();
@@ -272,6 +256,20 @@ fn execute (window: Window, command: &str, session_id: u64, command_id: u64, act
 }
 
 #[tauri::command]
+fn resolve_path(path: &str, cwd: &str) -> String {
+    let new_path = PathBuf::from_str(path).expect("Path isn't a path, unreachable").resolve_in(cwd).to_path_buf();
+
+    if let Ok(new_cwd) = new_path.canonicalize() {
+        return new_cwd.into_os_string().into_string().expect("Unreachable none-Unicode path");
+    }else {
+        // TODO, need a real error case
+        // Error if the directory doesn't exist.
+        return "Directory doesn't exist or you don't have permission to read it".to_string();
+    }
+}
+
+
+#[tauri::command]
 fn kill(target: u64, running_processes: State<ActiveSessions>) {
     // Just send control-C to the target
     // running_process.inner().kill();
@@ -307,7 +305,7 @@ fn main() {
         .plugin(tauri_plugin_shell::init())
         // .manage(RunningProcess { child: Default::default(), monitor_thread: Default::default() })
         .manage(ActiveSessions { map: Default::default() })
-        .invoke_handler(tauri::generate_handler![execute, kill, create_session])
+        .invoke_handler(tauri::generate_handler![execute, kill, resolve_path])
         // .invoke_handler(tauri::generate_handler![])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
