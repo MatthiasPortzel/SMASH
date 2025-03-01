@@ -101,11 +101,22 @@ class Session {
       self.cwd = new_cwd;
       return;
 
-    } else
+    } else {
+      command.backendCommand = Command.create(exe, command_parts, {
+        cwd: this.cwd
+      });
 
-    command.backendCommand = Command.create(exe, command_parts, {
-      cwd: this.cwd
-    });
+
+      command.backendCommand.stdout.on('data', line => { console.log(line); command.appendOutput(line); });
+      command.backendCommand.stderr.on('data', command.appendOutput.bind(command));
+      
+      debugger
+
+      // Spawn starts us in the background
+      // .execute would wait until all of the output was done (sync if you will)
+      const res = await command.backendCommand.spawn();
+      console.log(res);
+    }
 
     command.running = true;
 
@@ -115,17 +126,17 @@ class Session {
     // Since the user has run the command, scroll to the bottom
     queueScrollUpdate();
 
-    // console.log(runningCommands);
+    // // console.log(runningCommands);
 
-    // Now, if we failed to start the command, then we won't ever get data, so we can print an error message now
-    if (res !== "executing") {
-      // Print the error message
-      command.appendOutput(res);
-      // Remove from runningCommands?
-      // I think I should rename runningCommand to commands and use it to track finished commands as well.
-      // // Remove from runningCommands
-      // delete runningCommands[id];
-    }
+    // // Now, if we failed to start the command, then we won't ever get data, so we can print an error message now
+    // if (res !== "executing") {
+    //   // Print the error message
+    //   command.appendOutput(res);
+    //   // Remove from runningCommands?
+    //   // I think I should rename runningCommand to commands and use it to track finished commands as well.
+    //   // // Remove from runningCommands
+    //   // delete runningCommands[id];
+    // }
   }
 }
 

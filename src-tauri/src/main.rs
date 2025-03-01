@@ -90,170 +90,171 @@ struct ActiveSessions {
     map: Mutex<HashMap<u64, Session>>
 }
 
-// Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
-#[tauri::command]
-fn execute (window: Window, command: &str, session_id: u64, command_id: u64, active_sessions: State<ActiveSessions>) -> String {
-    let mut parts = command.trim().split_whitespace();
 
-    // Get the session for the given ID
-    // This needs to be broken out for lifetime reasons which is dumb.
-    let mut map = active_sessions.map.lock().unwrap();
-    let session = map.get_mut(&session_id).expect(&("failed to get session with id ".to_string() + &(session_id.to_string())));
+// // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
+// #[tauri::command]
+// fn execute (window: Window, command: &str, session_id: u64, command_id: u64, active_sessions: State<ActiveSessions>) -> String {
+//     let mut parts = command.trim().split_whitespace();
 
-    // // Error if it's already running a program
-    // if session.is_running {
-    //     return "already running".to_string();
-    // }
+//     // Get the session for the given ID
+//     // This needs to be broken out for lifetime reasons which is dumb.
+//     let mut map = active_sessions.map.lock().unwrap();
+//     let session = map.get_mut(&session_id).expect(&("failed to get session with id ".to_string() + &(session_id.to_string())));
 
-    // Use "ls" as the default command if you enter nothing.
-    // Eventually this will be configurable
-    let exe = parts.next().unwrap_or("ls");
+//     // // Error if it's already running a program
+//     // if session.is_running {
+//     //     return "already running".to_string();
+//     // }
 
-// TODO: replace std command with tauri-plugin-shell
+//     // Use "ls" as the default command if you enter nothing.
+//     // Eventually this will be configurable
+//     let exe = parts.next().unwrap_or("ls");
 
-    if exe == "cd" {
-        let arg = parts.next().unwrap_or("/Users/matthias").to_string();
+// // TODO: replace std command with tauri-plugin-shell
 
-        let new_cwd = arg.resolve_in(&session.cwd).to_path_buf();
+//     if exe == "cd" {
+//         let arg = parts.next().unwrap_or("/Users/matthias").to_string();
 
-        if let Ok(new_path) = new_cwd.canonicalize() {
-            session.cwd = new_path;
+//         let new_cwd = arg.resolve_in(&session.cwd).to_path_buf();
 
-            // Then we don't need to do anything else
-            // This is the current value that indicates "no error"
-            // TODO: we should return the new working directory so that JS can do stuff with it.
-            return "executing".to_string();
-        }else {
-            // Error if the directory doesn't exist.
-            return "Directory doesn't exist or you don't have permission to read it".to_string();
-        }
-    }
+//         if let Ok(new_path) = new_cwd.canonicalize() {
+//             session.cwd = new_path;
 
-    println!("Running {}", exe);
+//             // Then we don't need to do anything else
+//             // This is the current value that indicates "no error"
+//             // TODO: we should return the new working directory so that JS can do stuff with it.
+//             return "executing".to_string();
+//         }else {
+//             // Error if the directory doesn't exist.
+//             return "Directory doesn't exist or you don't have permission to read it".to_string();
+//         }
+//     }
 
-    let child_attempt = Command::new(exe)
-        .current_dir(&session.cwd)
-        .args(parts)
-        .stdout(Stdio::piped())
-        .stdin(Stdio::piped())
-        .spawn();
+//     println!("Running {}", exe);
 
-    if let Err(ref e) = child_attempt {
-        // On Mac, running a command which doesn't exist gives
-        // `Err` value: Os { code: 2, kind: NotFound, message: "No such file or directory" }
-        // We don't know how to handle other errors
-        if e.kind() != std::io::ErrorKind::NotFound {
-            // We force an unwrap, even though we know its an error, to trigger a panic
-            child_attempt.unwrap();
-        }
+//     let child_attempt = Command::new(exe)
+//         .current_dir(&session.cwd)
+//         .args(parts)
+//         .stdout(Stdio::piped())
+//         .stdin(Stdio::piped())
+//         .spawn();
 
-        return "Command not found".to_string();
-    }
+//     if let Err(ref e) = child_attempt {
+//         // On Mac, running a command which doesn't exist gives
+//         // `Err` value: Os { code: 2, kind: NotFound, message: "No such file or directory" }
+//         // We don't know how to handle other errors
+//         if e.kind() != std::io::ErrorKind::NotFound {
+//             // We force an unwrap, even though we know its an error, to trigger a panic
+//             child_attempt.unwrap();
+//         }
 
-    let mut child = child_attempt.unwrap();
+//         return "Command not found".to_string();
+//     }
 
-    // let mut child_stdin = child.stdin.take().unwrap();
-    // // TODO: Create an tab or process group object, create a command to create one of those,
-    // //  give them some ID, have the frontend specify the process to run the command in
-    // //  save the stdin into the process object in rust, write to std in when we get a command
-    // // simple!
-    // child_stdin.write(b"echo hello\n");
+//     let mut child = child_attempt.unwrap();
 
-    // // If I understand this right, this should work
-    // child_stdin.write(b"echo hello\n");
+//     // let mut child_stdin = child.stdin.take().unwrap();
+//     // // TODO: Create an tab or process group object, create a command to create one of those,
+//     // //  give them some ID, have the frontend specify the process to run the command in
+//     // //  save the stdin into the process object in rust, write to std in when we get a command
+//     // // simple!
+//     // child_stdin.write(b"echo hello\n");
 
-    let mut child_stdout = child.stdout.take().unwrap();
+//     // // If I understand this right, this should work
+//     // child_stdin.write(b"echo hello\n");
 
-    // // Need to copy this so that we can use it in the thread
-    // // We can't copy it in the thread because we can't use `id` in the thread (or `id` gets moved into the thread)
-    // let id_copy = session_id;
-    let sessions_ref = &active_sessions;
+//     let mut child_stdout = child.stdout.take().unwrap();
 
-
-    // Need to spawn a thread in order to poll the child io and dispatch events to JS
-    let thread_handle = std::thread::spawn(move || {
-        loop {
-            let mut byte: [u8; 1] = [0];
-            // child_stdout.read(&buf);
-
-            // Ideally I want to read as much data is available into a Vec,
-            //  then iterate it for EOF, if that's really necessary, instead of reading and
-            //  sending one byte at a time like this is doing.
-            // Of course, JS needs to be able to handle 1 byte at a time in case the underlying
-            //  command outputs one byte at a time, so it's not a big deal
-
-            // The semantics I really want is "read as much as is ready if it's ready—do not block"
-            // Then I can alternate checking stdout and stdin, or receive other commands from the application (if eventually needed)
-
-            // But this blocks
-            // This is really annoying because for commands with no output, like `cd`, it blocks forever, even after the process has exited.
-            println!("Reading a byte");
-            match child_stdout.read(&mut byte) {
-                Ok(0) => {
-                    // Read EOF
-                    // We read EOF at the end of the process's output, or when the process has been killed
-                    let _ = window.emit("eof", session_id);
-
-                    // TODO: Need to access ActiveSessions but we're in a separate thread.
-                    // https://tauri.app/develop/state-management/#access-state-with-the-manager-trait
-                    // // we need to take a lock on the process and reset it
-                    // let active_sessions_inner: ActiveSessions = tauri::Manager::state();
-                    // let mut map = active_sessions_inner.map.lock().expect("Failed to get lock on mutex from watching thread");
-                    // let session = map.get_mut(&id_copy).expect("No session with id");
-
-                    // session.is_running = false;
-
-                    // Ends the loop and the thread
-                    break;
-                }
-                Ok(_) => {
-                    println!("Read a byte, sending data");
-
-                    // LF
-                    // if byte[0] == 0x0A {}
+//     // // Need to copy this so that we can use it in the thread
+//     // // We can't copy it in the thread because we can't use `id` in the thread (or `id` gets moved into the thread)
+//     // let id_copy = session_id;
+//     let sessions_ref = &active_sessions;
 
 
-                    //     tx.send(match String::from_utf8(buf.clone()) {
-                    //           Ok(line) => Ok(PipedLine::Line(line)),
-                    //           Err(err) => Err(PipeError::NotUtf8(err)),
-                    //       })
-                    //       .unwrap();
-                    //     buf.clear()
-                    // } else {
-                    //     buf.push(byte[0])
-                    // }
+//     // Need to spawn a thread in order to poll the child io and dispatch events to JS
+//     let thread_handle = std::thread::spawn(move || {
+//         loop {
+//             let mut byte: [u8; 1] = [0];
+//             // child_stdout.read(&buf);
 
-                    // Pass tuple with both ID and data
-                    let _ = window.emit("data", (session_id, command_id, byte));
-                }
-                Err(_error) => {
-                    println!("Errored?");
-                    // In what world would this error?
-                    // "any form of I/O or other error"
-                    // I haven't encountered any errors here yet
-                    // tx.send(Err(PipeError::IO(error))).unwrap();
-                }
-            }
-        }
-    });
+//             // Ideally I want to read as much data is available into a Vec,
+//             //  then iterate it for EOF, if that's really necessary, instead of reading and
+//             //  sending one byte at a time like this is doing.
+//             // Of course, JS needs to be able to handle 1 byte at a time in case the underlying
+//             //  command outputs one byte at a time, so it's not a big deal
 
-    // We take a lock on the whole running_processes map here, which feels weird, but I think is needed.
-    // And it's totally fine since this lock isn't used in the thread, so it's only locked for the fraction of a second that it takes to start the process and put it in the map
-    // running_processes.map.lock().unwrap().insert(
-    //    id.to_string(),
-    //    RunningProcess {
-    //         child: child, // move ownership of the child into the HashMap
-    //         monitor_thread: thread_handle
-    //    }
-    // );
+//             // The semantics I really want is "read as much as is ready if it's ready—do not block"
+//             // Then I can alternate checking stdout and stdin, or receive other commands from the application (if eventually needed)
 
-    session.is_running = true;
-    session.child = Some(child);
-    session.monitor_thread = Some(thread_handle);
+//             // But this blocks
+//             // This is really annoying because for commands with no output, like `cd`, it blocks forever, even after the process has exited.
+//             println!("Reading a byte");
+//             match child_stdout.read(&mut byte) {
+//                 Ok(0) => {
+//                     // Read EOF
+//                     // We read EOF at the end of the process's output, or when the process has been killed
+//                     let _ = window.emit("eof", session_id);
 
-    // I think we need to return something. I guess I should check if I actually do
-    "executing".to_string()
-}
+//                     // TODO: Need to access ActiveSessions but we're in a separate thread.
+//                     // https://tauri.app/develop/state-management/#access-state-with-the-manager-trait
+//                     // // we need to take a lock on the process and reset it
+//                     // let active_sessions_inner: ActiveSessions = tauri::Manager::state();
+//                     // let mut map = active_sessions_inner.map.lock().expect("Failed to get lock on mutex from watching thread");
+//                     // let session = map.get_mut(&id_copy).expect("No session with id");
+
+//                     // session.is_running = false;
+
+//                     // Ends the loop and the thread
+//                     break;
+//                 }
+//                 Ok(_) => {
+//                     println!("Read a byte, sending data");
+
+//                     // LF
+//                     // if byte[0] == 0x0A {}
+
+
+//                     //     tx.send(match String::from_utf8(buf.clone()) {
+//                     //           Ok(line) => Ok(PipedLine::Line(line)),
+//                     //           Err(err) => Err(PipeError::NotUtf8(err)),
+//                     //       })
+//                     //       .unwrap();
+//                     //     buf.clear()
+//                     // } else {
+//                     //     buf.push(byte[0])
+//                     // }
+
+//                     // Pass tuple with both ID and data
+//                     let _ = window.emit("data", (session_id, command_id, byte));
+//                 }
+//                 Err(_error) => {
+//                     println!("Errored?");
+//                     // In what world would this error?
+//                     // "any form of I/O or other error"
+//                     // I haven't encountered any errors here yet
+//                     // tx.send(Err(PipeError::IO(error))).unwrap();
+//                 }
+//             }
+//         }
+//     });
+
+//     // We take a lock on the whole running_processes map here, which feels weird, but I think is needed.
+//     // And it's totally fine since this lock isn't used in the thread, so it's only locked for the fraction of a second that it takes to start the process and put it in the map
+//     // running_processes.map.lock().unwrap().insert(
+//     //    id.to_string(),
+//     //    RunningProcess {
+//     //         child: child, // move ownership of the child into the HashMap
+//     //         monitor_thread: thread_handle
+//     //    }
+//     // );
+
+//     session.is_running = true;
+//     session.child = Some(child);
+//     session.monitor_thread = Some(thread_handle);
+
+//     // I think we need to return something. I guess I should check if I actually do
+//     "executing".to_string()
+// }
 
 #[tauri::command]
 fn resolve_path(path: &str, cwd: &str) -> String {
@@ -305,7 +306,7 @@ fn main() {
         .plugin(tauri_plugin_shell::init())
         // .manage(RunningProcess { child: Default::default(), monitor_thread: Default::default() })
         .manage(ActiveSessions { map: Default::default() })
-        .invoke_handler(tauri::generate_handler![execute, kill, resolve_path])
+        .invoke_handler(tauri::generate_handler![kill, resolve_path])
         // .invoke_handler(tauri::generate_handler![])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
