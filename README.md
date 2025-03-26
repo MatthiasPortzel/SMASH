@@ -49,12 +49,12 @@ Current milestone: Pre-Alpha
 After these features are implemented I and other early adopters will be able to use SMASH (with another Terminal open for interactive apps).
 In this phase, we're only doing automated nightly releases
 
- - [ X ] Ability to type in commands
+ - [   ] Ability to type in commands
  - [ X ] Natural editing
  - [ X ] Sick appearance
  - [ X ] Ability to run commands on Enter
  - [   ] Ability to kill commands with control+c
- - [ X ] Ability to cd
+ - [   ] Ability to cd
  - [   ] Nightly CI releases
 
 ### Beta

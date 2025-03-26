@@ -1,4 +1,5 @@
 {
+  "$schema": "https://schema.tauri.app/config/2",
   "productName": "smash",
   "version": "0.0.0",
   "identifier": "com.matthiasportzel.smash",
@@ -20,11 +21,6 @@
     ],
     "security": {
       "csp": null
-    }
-  },
-  "plugins": {
-    "shell": {
-      "open": ".*"
     }
   },
   "bundle": {

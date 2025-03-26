@@ -102,8 +102,8 @@ class Session {
       return;
 
     } else {
-      command.backendCommand = Command.create(exe, command_parts, {
-        cwd: this.cwd
+      command.backendCommand = Command.create("echo-name", ["hello"], {
+        cwd: null
       });
 
 
